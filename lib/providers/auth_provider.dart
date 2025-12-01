@@ -20,6 +20,16 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  Future<void> register(String name, String email, String password) async {
+    loading = true; notifyListeners();
+    try {
+      await authService.register(name, email, password);
+      await loadProfile();
+    } finally {
+      loading = false; notifyListeners();
+    }
+  }
+
   Future<void> login(String email, String password) async {
     loading = true; notifyListeners();
     try {

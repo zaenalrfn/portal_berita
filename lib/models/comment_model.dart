@@ -1,4 +1,5 @@
 import 'user_model.dart';
+
 class CommentModel {
   final int id;
   final int? newsId;
@@ -15,7 +16,7 @@ class CommentModel {
     this.comment,
     this.createdAt,
     this.updatedAt,
-    this.user
+    this.user,
   });
 
   factory CommentModel.fromJson(Map<String, dynamic> json) {
@@ -24,9 +25,29 @@ class CommentModel {
       newsId: json['news_id'],
       userId: json['user_id'],
       comment: json['comment'],
-      createdAt: DateTime.parse(json['created_at']),
-      updatedAt: DateTime.parse(json['updated_at']),
-      user: json['user'] != null ? UserModel.fromJson(json['user']) : null
+      createdAt: json['created_at'] != null
+          ? DateTime.tryParse(json['created_at'])
+          : null,
+      updatedAt: json['updated_at'] != null
+          ? DateTime.tryParse(json['updated_at'])
+          : null,
+      user: json['user'] != null ? UserModel.fromJson(json['user']) : null,
+    );
+  }
+
+  // Tambahkan copyWith agar update comment gampang
+  CommentModel copyWith({
+    String? comment,
+    DateTime? updatedAt,
+  }) {
+    return CommentModel(
+      id: id,
+      newsId: newsId,
+      userId: userId,
+      comment: comment ?? this.comment,
+      createdAt: createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      user: user,
     );
   }
 }

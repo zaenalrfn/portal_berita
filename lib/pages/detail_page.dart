@@ -6,7 +6,6 @@ import '../models/comment_model.dart';
 import '../pages/login_dialog.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
-import '../services/api_client.dart' as ac;
 
 class DetailPage extends StatefulWidget {
   final int newsId;
@@ -61,18 +60,107 @@ class _DetailPageState extends State<DetailPage> {
       commentController.clear();
 
       setState(() {
-        news!.comments.insert(0, created); // <--- langsung masuk ke model
+        news!.comments.insert(0, created);
       });
     } catch (e) {
       debugPrint(e.toString());
     }
   }
 
+  // EDIT DIALOG
+  void _editCommentDialog(CommentModel c) {
+    final controller = TextEditingController(text: c.comment);
+
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: const Color(0xFF2B2623),
+        title: const Text("Edit Comment", style: TextStyle(color: Colors.white)),
+        content: TextField(
+          controller: controller,
+          style: const TextStyle(color: Colors.white),
+          decoration: const InputDecoration(
+            hintText: "Edit comment...",
+            hintStyle: TextStyle(color: Colors.white54),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+            onPressed: () async {
+              final newText = controller.text.trim();
+              if (newText.isEmpty) return;
+
+              try {
+                await newsService.editComment(c.id, newText);
+
+                setState(() {
+                  final index = news!.comments.indexWhere((x) => x.id == c.id);
+                  news!.comments[index] = c.copyWith(comment: newText);
+                });
+
+                Navigator.pop(context);
+              } catch (e) {
+                debugPrint(e.toString());
+              }
+            },
+            child: const Text("Save"),
+          )
+        ],
+      ),
+    );
+  }
+
+  // DELETE DIALOG
+  void _deleteComment(CommentModel c) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: const Color(0xFF2B2623),
+        title: const Text("Delete Comment?", style: TextStyle(color: Colors.white)),
+        content: const Text(
+          "Are you sure you want to delete this comment?",
+          style: TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () async {
+              try {
+                await newsService.deleteComment(c.id);
+
+                setState(() {
+                  news!.comments.removeWhere((x) => x.id == c.id);
+                });
+
+                Navigator.pop(context);
+              } catch (e) {
+                debugPrint(e.toString());
+              }
+            },
+            child: const Text("Delete"),
+          )
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final auth = context.watch<AuthProvider>();
+    final currentUserId = auth.user?.id;
+
     return Scaffold(
       backgroundColor: const Color(0xFF2B2623),
-      appBar: AppBar(title: const Text('News Detail')),
+      appBar: AppBar(title: const Text("News Detail")),
       body: loading
           ? const Center(child: CircularProgressIndicator())
           : news == null
@@ -84,36 +172,33 @@ class _DetailPageState extends State<DetailPage> {
                     children: [
                       if (news!.thumbnail != null)
                         Image.network(news!.thumbnail!),
-                      const SizedBox(height: 12),
-
-                      Text(
-                        news!.title,
-                        style: const TextStyle(
-                            fontSize: 20, fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 8),
-
-                      Text(
-                        'by ${news!.user?.name} • ${news!.publishedAt.toLocal().toString().split(" ").first}',
-                        style: TextStyle(color: Colors.grey[300]),
-                      ),
 
                       const SizedBox(height: 12),
+                      Text(news!.title,
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 5),
+
                       Text(
-                        news!.content,
-                        style: const TextStyle(color: Colors.white),
+                        "by ${news!.user?.name}",
+                        style: const TextStyle(color: Colors.white70),
                       ),
 
-                      const SizedBox(height: 24),
-                      const Divider(),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 10),
+                      Text(news!.content,
+                          style: const TextStyle(color: Colors.white)),
+                      const SizedBox(height: 20),
 
                       const Text("Comments",
                           style: TextStyle(
-                              fontSize: 16, fontWeight: FontWeight.bold)),
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white)),
                       const SizedBox(height: 10),
 
-                      // 💬 Tampilkan semua komentar
+                      // COMMENTS
                       for (final c in news!.comments)
                         ListTile(
                           title: Text(
@@ -121,31 +206,54 @@ class _DetailPageState extends State<DetailPage> {
                             style: const TextStyle(color: Colors.white),
                           ),
                           subtitle: Text(
-                            c.comment ?? "",
-                            style: const TextStyle(color: Colors.grey),
+                            c.comment as String,
+                            style: const TextStyle(color: Colors.white70),
                           ),
-                          trailing: Text(
-                            c.createdAt
-                                    ?.toLocal()
-                                    .toString()
-                                    .split(' ')
-                                    .first ??
-                                "",
-                            style: TextStyle(
-                                fontSize: 11, color: Colors.grey[400]),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                c.createdAt
+                                        ?.toLocal()
+                                        .toString()
+                                        .split(" ")
+                                        .first ??
+                                    "",
+                                style: const TextStyle(
+                                    color: Colors.white54, fontSize: 12),
+                              ),
+                              const SizedBox(width: 8),
+
+                              // OWNER ONLY → EDIT & DELETE
+                              if (currentUserId == c.userId) ...[
+                                IconButton(
+                                  icon: const Icon(Icons.edit,
+                                      color: Colors.orangeAccent, size: 20),
+                                  onPressed: () => _editCommentDialog(c),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.delete,
+                                      color: Colors.redAccent, size: 20),
+                                  onPressed: () => _deleteComment(c),
+                                ),
+                              ]
+                            ],
                           ),
                         ),
 
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 10),
 
-                      // Input komentar
+                      // ADD COMMENT
                       Row(
                         children: [
                           Expanded(
                             child: TextField(
                               controller: commentController,
+                              style: const TextStyle(color: Colors.white),
                               decoration: InputDecoration(
-                                hintText: "Add a comment",
+                                hintText: "Add a comment...",
+                                hintStyle:
+                                    const TextStyle(color: Colors.white54),
                                 filled: true,
                                 fillColor: const Color(0xFF3A332F),
                                 border: OutlineInputBorder(
@@ -155,11 +263,11 @@ class _DetailPageState extends State<DetailPage> {
                               ),
                             ),
                           ),
-                          const SizedBox(width: 10),
+                          const SizedBox(width: 8),
                           ElevatedButton(
-                            onPressed: _addComment,
                             style: ElevatedButton.styleFrom(
                                 backgroundColor: Colors.deepOrange),
+                            onPressed: _addComment,
                             child: const Text("Post"),
                           )
                         ],
@@ -170,4 +278,3 @@ class _DetailPageState extends State<DetailPage> {
     );
   }
 }
-

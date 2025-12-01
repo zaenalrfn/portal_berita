@@ -93,17 +93,20 @@ class NewsService {
     }
   }
 
-  Future<void> editComment(int newsId, String body) async {
-    final r = await api.put(
-      '/api/comments/$newsId',
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'body': body}),
-    );
-    if (r.statusCode != 200) throw Exception('Failed update: ${r.body}');
+ Future<void> editComment(int commentId, String commentText) async {
+  final r = await api.put(
+    '/api/comments/$commentId',
+    headers: {'Content-Type': 'application/json'},
+    body: jsonEncode({'comment': commentText}),
+  );
+  if (r.statusCode != 200) {
+    throw Exception('Failed update: ${r.body}');
   }
+}
 
-  Future<void> deleteComment(int newsId) async {
-    final r = await api.delete('/api/comments/$newsId');
-    if (r.statusCode != 200) throw Exception('Failed delete');
-  }
+Future<void> deleteComment(int commentId) async {
+  final r = await api.delete('/api/comments/$commentId');
+  if (r.statusCode != 200) throw Exception('Failed delete: ${r.body}');
+}
+
 }
