@@ -15,7 +15,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('id_ID', null);
 
-  final api = ApiClient(baseUrl: 'http://api-portal-berita.test');
+  final api = ApiClient(baseUrl: 'http://10.28.196.58:8000');
   final authService = AuthService(api);
   final newsService = NewsService(api);
 
@@ -133,9 +133,9 @@ class _RootPageState extends State<RootPage> {
         currentIndex: _current,
         onTap: _onNavTap,
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-          BottomNavigationBarItem(icon: Icon(Icons.add), label: 'Add'),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
+          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Beranda'),
+          BottomNavigationBarItem(icon: Icon(Icons.add), label: 'Tambah'),
+          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profil'),
         ],
       ),
     );

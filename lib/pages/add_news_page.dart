@@ -204,7 +204,7 @@ class _AddNewsPageState extends State<AddNewsPage> {
                         height: 20,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : Text(isEdit ? "Update" : "Create"),
+                    : Text(isEdit ? "Update" : "Buat Berita"),
               ),
             ],
           ),
