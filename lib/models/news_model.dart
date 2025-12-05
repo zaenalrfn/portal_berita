@@ -8,6 +8,7 @@ class NewsModel {
   final String slug;
   final String content;
   final String? thumbnail;
+  final String? thumbnailUrl;
   final DateTime? publishedAt;
   final DateTime? createdAt;
   final DateTime? updatedAt;
@@ -25,6 +26,7 @@ class NewsModel {
     this.createdAt,
     this.updatedAt,
     this.user,
+    this.thumbnailUrl,
     required this.comments,
   });
 
@@ -52,6 +54,7 @@ class NewsModel {
       slug: json['slug']?.toString() ?? '',
       content: json['content']?.toString() ?? '',
       thumbnail: json['thumbnail']?.toString(),
+      thumbnailUrl: json['thumbnail_url']?.toString(),
       publishedAt: parseDate(json['published_at']),
       createdAt: parseDate(json['created_at']),
       updatedAt: parseDate(json['updated_at']),

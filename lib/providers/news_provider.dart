@@ -23,6 +23,20 @@ class NewsProvider extends ChangeNotifier {
   bool loading = false;
   bool loadingMore = false;
 
+  // PAGINATE MY NEWS
+  int currentPageMy = 0;
+  int lastPageMy = 1;
+  int perPageMy = 5;
+  bool loadingMy = false;
+  bool loadingMoreMy = false;
+
+  NewsModel _toNewsModel(dynamic e) {
+    if (e is NewsModel) return e;
+    if (e is Map<String, dynamic>) return NewsModel.fromJson(e);
+    if (e is Map) return NewsModel.fromJson(Map<String, dynamic>.from(e));
+    throw Exception('Unsupported item type: ${e.runtimeType}');
+  }
+
   // ============================================================
   // FETCH INITIAL (page 1)
   // ============================================================
@@ -82,13 +96,66 @@ class NewsProvider extends ChangeNotifier {
   // ============================================================
   // FETCH NEWS BY USER LOGIN
   // ============================================================
-  Future<void> fetchMyNews() async {
+  Future<void> fetchMyNews({int page = 1, int perPage = 5, bool refresh = false}) async {
+    // Guards
+    if (page == 1 && loadingMy && !refresh) return;
+    if (page > 1 && loadingMoreMy) return;
+
+    if (page == 1) {
+      loadingMy = true;
+      notifyListeners();
+    } else {
+      loadingMoreMy = true;
+      notifyListeners();
+    }
+
     try {
-      myNews = await service.fetchMyNews();
+      // service.fetchMyNews now returns Map paginated (see NewsService)
+      final res = await service.fetchMyNews(page: page, perPage: perPage);
+
+      final itemsRaw = (res['data'] ?? []) as List<dynamic>;
+      final items = itemsRaw.map((e) => _toNewsModel(e)).toList();
+
+      final current = res['current_page'] is int
+          ? res['current_page'] as int
+          : int.tryParse('${res['current_page']}') ?? page;
+      final last = res['last_page'] is int
+          ? res['last_page'] as int
+          : int.tryParse('${res['last_page']}') ?? page;
+
+      if (page == 1) {
+        myNews = items;
+      } else {
+        // hindari duplikat
+        final existingIds = myNews.map((m) => m.id).toSet();
+        final toAdd = items.where((it) => !existingIds.contains(it.id)).toList();
+        myNews.addAll(toAdd);
+      }
+
+      currentPageMy = current;
+      lastPageMy = last;
+      perPageMy = perPage;
       notifyListeners();
     } catch (e) {
       debugPrint("fetchMyNews error: $e");
+      rethrow;
+    } finally {
+      if (page == 1) {
+        loadingMy = false;
+      } else {
+        loadingMoreMy = false;
+      }
+      notifyListeners();
     }
+  }
+
+  bool get hasMoreMy => currentPageMy < lastPageMy;
+
+  Future<void> loadMoreMy() async {
+    if (!hasMoreMy) return;
+    if (loadingMoreMy) return;
+    final next = (currentPageMy <= 0) ? 2 : (currentPageMy + 1);
+    await fetchMyNews(page: next, perPage: perPageMy);
   }
 
   // ============================================================
@@ -114,7 +181,7 @@ class NewsProvider extends ChangeNotifier {
     required String title,
     required String content,
     File? fileImage,
-    Uint8List? webImage,
+    Uint8List? webImage, File? imageFile,
   }) async {
     try {
       final created = await service.createMultipart(
@@ -165,7 +232,7 @@ class NewsProvider extends ChangeNotifier {
     required String title,
     required String content,
     File? fileImage,
-    Uint8List? webImage,
+    Uint8List? webImage, File? imageFile,
   }) async {
     try {
       await service.updateMultipart(
@@ -176,7 +243,6 @@ class NewsProvider extends ChangeNotifier {
         webImage: webImage,
       );
 
-      await fetchMyNews();
       await refresh(); // refresh public
     } catch (e) {
       debugPrint("updateNewsMultipart error: $e");

@@ -20,8 +20,8 @@ class _AddNewsPageState extends State<AddNewsPage> {
   final _titleCtrl = TextEditingController();
   final _contentCtrl = TextEditingController();
 
-  File? _imageFile;       // Android/iOS
-  Uint8List? _webImage;   // Web (bytes)
+  File? _imageFile; // Android/iOS
+  Uint8List? _webImage; // Web (bytes)
 
   bool _loading = false;
 
@@ -34,6 +34,13 @@ class _AddNewsPageState extends State<AddNewsPage> {
     }
   }
 
+  @override
+  void dispose() {
+    _titleCtrl.dispose();
+    _contentCtrl.dispose();
+    super.dispose();
+  }
+
   Future<void> pickImage() async {
     final picker = ImagePicker();
     final picked = await picker.pickImage(source: ImageSource.gallery);
@@ -41,14 +48,12 @@ class _AddNewsPageState extends State<AddNewsPage> {
     if (picked == null) return;
 
     if (kIsWeb) {
-      // WEB → read bytes
       _webImage = await picked.readAsBytes();
     } else {
-      // ANDROID/iOS → use File
       _imageFile = File(picked.path);
     }
 
-    setState(() {});
+    if (mounted) setState(() {});
   }
 
   Widget _buildImagePreview() {
@@ -60,8 +65,7 @@ class _AddNewsPageState extends State<AddNewsPage> {
       return Image.file(_imageFile!, height: 160, fit: BoxFit.cover);
     }
 
-    // Jika edit dan sudah punya thumbnail bawaan
-    if (widget.news?.thumbnail != null) {
+    if (widget.news?.thumbnail != null && widget.news!.thumbnail!.isNotEmpty) {
       return Image.network(
         widget.news!.thumbnail!,
         height: 160,
@@ -78,43 +82,75 @@ class _AddNewsPageState extends State<AddNewsPage> {
     );
   }
 
+  void _resetFormAfterCreate() {
+    _titleCtrl.clear();
+    _contentCtrl.clear();
+    _imageFile = null;
+    _webImage = null;
+    // Optionally, unfocus fields
+    FocusScope.of(context).unfocus();
+    if (mounted) setState(() {});
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
-    setState(() => _loading = true);
+    // close keyboard
+    FocusScope.of(context).unfocus();
+
+    if (mounted) setState(() => _loading = true);
+
+    debugPrint(
+      "Submit: title=${_titleCtrl.text}, hasFile=${_imageFile != null}, hasWeb=${_webImage != null}",
+    );
 
     final prov = context.read<NewsProvider>();
 
     try {
       if (widget.news == null) {
         // CREATE
-        await prov.createNewsMultipart(
+        final created = await prov.createNewsMultipart(
           title: _titleCtrl.text,
           content: _contentCtrl.text,
           fileImage: _imageFile,
           webImage: _webImage,
         );
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Berita berhasil dibuat")));
+        debugPrint("Create success id=${created.id}");
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Berita berhasil dibuat")),
+          );
+          // Reset form so user can create another
+          _resetFormAfterCreate();
+        }
       } else {
         // UPDATE
-        await prov.updateNewsMultipart(
+        final updated = await prov.updateNewsMultipart(
           id: widget.news!.id,
           title: _titleCtrl.text,
           content: _contentCtrl.text,
           fileImage: _imageFile,
           webImage: _webImage,
         );
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Berita berhasil diperbarui")));
-      }
+        // debugPrint("Update success id=${updated.id}");
 
-      Navigator.pop(context, true);
-    } catch (e) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text("Error: $e")));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Berita berhasil diperbarui")),
+          );
+          // Keep the form populated (user is editing). If you want to reflect updated
+          // thumbnail from server, you can update widget.news via other means.
+        }
+      }
+    } catch (e, st) {
+      debugPrint("Error in submit: $e\n$st");
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text("Error: $e")));
+      }
     } finally {
-      setState(() => _loading = false);
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -143,7 +179,8 @@ class _AddNewsPageState extends State<AddNewsPage> {
               TextFormField(
                 controller: _titleCtrl,
                 style: const TextStyle(color: Colors.white),
-                validator: (v) => v!.isEmpty ? "Judul wajib diisi" : null,
+                validator: (v) =>
+                    v == null || v.isEmpty ? "Judul wajib diisi" : null,
                 decoration: _field("Judul berita"),
               ),
               const SizedBox(height: 16),
@@ -153,7 +190,8 @@ class _AddNewsPageState extends State<AddNewsPage> {
                 controller: _contentCtrl,
                 style: const TextStyle(color: Colors.white),
                 maxLines: 8,
-                validator: (v) => v!.isEmpty ? "Konten wajib diisi" : null,
+                validator: (v) =>
+                    v == null || v.isEmpty ? "Konten wajib diisi" : null,
                 decoration: _field("Isi konten berita"),
               ),
 
@@ -161,7 +199,11 @@ class _AddNewsPageState extends State<AddNewsPage> {
               ElevatedButton(
                 onPressed: _loading ? null : _submit,
                 child: _loading
-                    ? const CircularProgressIndicator()
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
                     : Text(isEdit ? "Update" : "Create"),
               ),
             ],

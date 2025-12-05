@@ -261,20 +261,46 @@ class NewsService {
   // ============================================================
   // MY NEWS (fetch news by authenticated user)
   // ============================================================
-  Future<List<NewsModel>> fetchMyNews() async {
-    final r = await api.get('/api/user/news');
+  Future<Map<String, dynamic>> fetchMyNews({
+    int page = 1,
+    int perPage = 5,
+  }) async {
+    final path = '/api/user/news?page=$page&per_page=$perPage';
+    final r = await api.get(path); 
 
     if (r.statusCode == 200) {
       final j = jsonDecode(r.body);
-      final data = j['data'] ?? j;
+      final dataWrapper = (j is Map && j.containsKey('data')) ? j['data'] : j;
 
-      final list = data is List ? data : (data['data'] ?? data);
+      final currentPage = dataWrapper['current_page'] is int
+          ? dataWrapper['current_page'] as int
+          : int.tryParse('${dataWrapper['current_page']}') ?? page;
 
-      return (list as List)
-          .map((e) => NewsModel.fromJson(Map<String, dynamic>.from(e)))
-          .toList();
+      final lastPage = dataWrapper['last_page'] is int
+          ? dataWrapper['last_page'] as int
+          : int.tryParse('${dataWrapper['last_page']}') ?? page;
+
+      final perPageResp = dataWrapper['per_page'] is int
+          ? dataWrapper['per_page'] as int
+          : int.tryParse('${dataWrapper['per_page']}') ?? perPage;
+
+      final total = dataWrapper['total'] is int
+          ? dataWrapper['total'] as int
+          : int.tryParse('${dataWrapper['total']}') ?? 0;
+
+      final list = (dataWrapper['data'] ?? dataWrapper['items'] ?? []) as List<dynamic>;
+
+      return {
+        'current_page': currentPage,
+        'last_page': lastPage,
+        'per_page': perPageResp,
+        'total': total,
+        'data': list,
+      };
     }
 
+    // debug membantu saat server mengembalikan error body
     throw Exception('Failed my news: ${r.statusCode} ${r.body}');
   }
+
 }
