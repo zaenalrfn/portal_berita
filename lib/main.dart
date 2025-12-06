@@ -11,15 +11,17 @@ import 'pages/login_dialog.dart';
 import 'pages/home_page.dart';
 import 'pages/profile_page.dart';
 import 'pages/add_news_page.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await dotenv.load(fileName: ".env"); 
   await initializeDateFormatting('id_ID', null);
 
-  // create ApiClient WITHOUT onUnauthenticated; we'll assign callback after runApp
-  final api = ApiClient(baseUrl: 'http://10.28.196.58:8000');
+  final baseUrl = dotenv.env['API_BASE_URL'] ?? '';
+  final api = ApiClient(baseUrl: baseUrl);
   final authService = AuthService(api);
   final newsService = NewsService(api);
 
