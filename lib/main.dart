@@ -1,3 +1,4 @@
+// lib/main.dart
 import 'package:flutter/material.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:provider/provider.dart';
@@ -11,10 +12,13 @@ import 'pages/home_page.dart';
 import 'pages/profile_page.dart';
 import 'pages/add_news_page.dart';
 
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('id_ID', null);
 
+  // create ApiClient WITHOUT onUnauthenticated; we'll assign callback after runApp
   final api = ApiClient(baseUrl: 'http://10.28.196.58:8000');
   final authService = AuthService(api);
   final newsService = NewsService(api);
@@ -26,9 +30,38 @@ void main() async {
         ChangeNotifierProvider(create: (_) => AuthProvider(authService)),
         ChangeNotifierProvider(create: (_) => NewsProvider(newsService)),
       ],
-      child: MyApp(), // newsService tidak perlu dilempar ke MyApp sekarang
+      child: const MyApp(),
     ),
   );
+
+  // assign onUnauthenticated after the app is mounted so navigatorKey.currentContext is ready
+  Future.microtask(() {
+    api.onUnauthenticated = () async {
+      final ctx = navigatorKey.currentContext;
+      if (ctx == null) return;
+
+      // 1) update provider state: logout local only (set sessionExpired=true)
+      try {
+        final auth = Provider.of<AuthProvider>(ctx, listen: false);
+        await auth.logoutLocalOnly();
+      } catch (e) {
+        // ignore errors
+      }
+
+      // 2) OPTIONAL: show a small SnackBar (non-blocking) to inform user session expired
+      // but do NOT force login dialog on app start.
+      try {
+        ScaffoldMessenger.of(ctx).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Sesi Anda telah berakhir. Silakan login saat mengakses fitur.',
+            ),
+            duration: Duration(seconds: 4),
+          ),
+        );
+      } catch (_) {}
+    };
+  });
 }
 
 class MyApp extends StatelessWidget {
@@ -46,11 +79,18 @@ class MyApp extends StatelessWidget {
       ),
     );
 
-    return MaterialApp(title: 'News Portal', theme: theme, home: RootPage());
+    return MaterialApp(
+      navigatorKey: navigatorKey,
+      title: 'News Portal',
+      theme: theme,
+      home: const RootPage(),
+    );
   }
 }
 
+// rest of RootPage stays the same (use your existing code)
 class RootPage extends StatefulWidget {
+  const RootPage({super.key});
   @override
   State<RootPage> createState() => _RootPageState();
 }
@@ -64,18 +104,14 @@ class _RootPageState extends State<RootPage> {
   void initState() {
     super.initState();
 
-    // prefetch: gunakan fetchInitial() (bukan fetch())
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // muat data awal news (page 1)
       context.read<NewsProvider>().fetchInitial();
-      // muat profile user
       context.read<AuthProvider>().loadProfile();
     });
 
     _authListener = () {
       final auth = context.read<AuthProvider>();
       if (!auth.isLoggedIn && mounted) {
-        // jika user logout dan sedang berada di Profile tab, pindah ke Home
         if (_current == 1) {
           setState(() => _current = 0);
         }
@@ -95,7 +131,6 @@ class _RootPageState extends State<RootPage> {
     super.dispose();
   }
 
-  // cek apaka user sudah login atau belum buat akses halaman profile dan juga add news
   Future<void> _onNavTap(int index) async {
     if (index == 1 || index == 2) {
       final auth = context.read<AuthProvider>();
@@ -106,12 +141,10 @@ class _RootPageState extends State<RootPage> {
         );
 
         if (didLogin == true) {
-          // user barusan login sukses: muat ulang profile & data yang perlu
           await context.read<AuthProvider>().loadProfile();
-          await context.read<NewsProvider>().refresh(); // gunakan refresh() bukan fetch()
+          await context.read<NewsProvider>().refresh();
           setState(() => _current = index);
         } else {
-          // user batal / gagal login -> jangan pindah tab
           return;
         }
       } else {
@@ -121,9 +154,6 @@ class _RootPageState extends State<RootPage> {
       setState(() => _current = index);
     }
   }
-
-
-
 
   @override
   Widget build(BuildContext context) {

@@ -25,9 +25,11 @@ class _DetailPageState extends State<DetailPage> {
   @override
   void initState() {
     super.initState();
-    final api = ApiClient(baseUrl: 'http://10.28.196.58:8000');
-    newsService = NewsService(api);
-    _load();
+   WidgetsBinding.instance.addPostFrameCallback((_) {
+      final api = Provider.of<ApiClient>(context, listen: false);
+      newsService = NewsService(api);
+      _load();
+    });
   }
 
   Future<void> _load() async {
